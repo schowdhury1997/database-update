@@ -50,21 +50,28 @@ export interface TableConfig {
   n?: number;
 }
 
+export interface DefinerOverride {
+  user: string;
+  host: string;
+}
+
 export interface CondenseConfig {
   source_path: string;
   output_path: string;
   table_configs: Record<string, TableConfig>;
+  definer_override?: DefinerOverride | null;
 }
 
 export interface DockerConfig {
   compose_file_path: string;
   service_name: string;
   database_name: string;
+  definer_override?: DefinerOverride | null;
+  drop_existing_data?: boolean;
 }
 
 export interface PreflightStatus {
   docker_available: boolean;
-  pv_available: boolean;
   compose_file_exists: boolean;
   container_running: boolean;
   errors: string[];
@@ -80,6 +87,8 @@ export interface Template {
   aws_profile: string | null;
   download_directory: string | null;
   table_configs: Record<string, TableConfig>;
+  definer_override?: DefinerOverride | null;
+  drop_existing_data?: boolean;
   last_used: string | null;
 }
 

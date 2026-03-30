@@ -29,7 +29,7 @@ cd src-tauri && cargo check  # Fast Rust compilation check
 | `condenser.rs` | Streaming condenser with rolling buffers for "last N rows" support |
 | `extractor.rs` | Gzip decompression with progress tracking via CountingReader |
 | `s3.rs` | S3 download with resume support, credential resolution (.env file priority, then AWS profile chain) |
-| `docker.rs` | Pre-flight checks + `pv | docker compose exec` command construction and progress parsing |
+| `docker.rs` | Pre-flight checks, Rust-streamed SQL import to Docker MySQL with progress tracking, definer override (`replace_definer`) |
 | `templates.rs` | Template CRUD — JSON files in `~/Library/Application Support/database-update/templates/` |
 | `scheduler.rs` | macOS launchd plist generation for scheduled tasks |
 | `cli.rs` | CLI argument parsing for headless execution (used by scheduled tasks) |
@@ -66,7 +66,10 @@ The most complex parsing logic. Splits `VALUES (a,'b'),(c,'d');` into individual
 3. If neither works, show clear error message
 
 ### Docker Import
-Constructs: `pv -f -n '{sql_path}' | docker compose -f '{compose}' exec -T {service} mysql {database}`. Parses pv's `-n` stderr output (percentage per line) for progress tracking.
+Streams SQL file through Rust directly into `docker compose -f '{compose}' exec -T {service} mysql {database}` via piped stdin. Progress is tracked by bytes read from the file (no external dependencies like `pv`). MySQL stderr is captured in a dedicated thread and surfaced as warnings on success or included in error messages on failure. When no definer override is set, uses raw 8MB chunk streaming for maximum throughput; with definer override, streams line-by-line to apply replacements.
+
+### Definer Override
+Optionally replaces `DEFINER=`user`@`host`` in SQL views, triggers, and procedures during both condensing and direct import. Configured in the Docker Import Settings UI with user and host fields (defaults to `root@localhost`). Persisted in templates. The `replace_definer()` function in `docker.rs` handles the string replacement efficiently without regex.
 
 ## Style Guidelines
 
@@ -113,7 +116,7 @@ Use `lucide-react` exclusively. Import individual icons. Typical sizes: 15-17px 
 
 ```
 S3 Download (.sql.gz) → Gzip Extract (.sql) → Scan (table/FK/size extraction)
-→ User configures tables → Condense (streaming filter) → Docker Import (pv | mysql)
+→ User configures tables → Condense (streaming filter + optional definer override) → Docker Import (Rust-streamed to mysql)
 ```
 
 Each phase emits `ProgressEvent` via Tauri events. Frontend listens with `useProgress` hook.

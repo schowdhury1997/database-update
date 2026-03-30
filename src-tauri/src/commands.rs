@@ -11,7 +11,6 @@ use std::path::PathBuf;
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PreflightStatus {
     pub docker_available: bool,
-    pub pv_available: bool,
     pub compose_file_exists: bool,
     pub container_running: bool,
     pub errors: Vec<String>,
@@ -59,7 +58,7 @@ pub async fn run_sql(
     docker_config: DockerConfig,
     sql_path: String,
     app: tauri::AppHandle,
-) -> Result<(), AppError> {
+) -> Result<Vec<String>, AppError> {
     let path = PathBuf::from(sql_path);
     crate::docker::run_sql(&docker_config, &path, &app).await
 }
@@ -69,7 +68,6 @@ pub fn preflight_check(docker_config: DockerConfig) -> PreflightStatus {
     let result = crate::docker::preflight_check(&docker_config);
     PreflightStatus {
         docker_available: result.docker_available,
-        pv_available: result.pv_available,
         compose_file_exists: result.compose_file_exists,
         container_running: result.container_running,
         errors: result.errors,

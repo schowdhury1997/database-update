@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import {
   CheckCircle2, XCircle, Zap, Play, ShieldCheck, ArrowLeft, Terminal,
@@ -27,7 +27,12 @@ export function Execute({ mode, condenseConfig, dockerConfig, sqlPath, onComplet
   const [log, setLog] = useState<string[]>([]);
   const addLog = (msg: string) => setLog((p) => [...p, `[${new Date().toLocaleTimeString()}] ${msg}`]);
 
-  useEffect(() => { run(); }, []);
+  const hasStarted = useRef(false);
+  useEffect(() => {
+    if (hasStarted.current) return;
+    hasStarted.current = true;
+    run();
+  }, []);
 
   const run = async () => {
     try {
@@ -44,7 +49,8 @@ export function Execute({ mode, condenseConfig, dockerConfig, sqlPath, onComplet
         setResultPath(out); addLog(`Condensed file: ${out}`);
         if (mode === "condense_and_run" && dockerConfig) {
           setPhase("importing"); addLog("Starting MySQL import...");
-          await invoke("run_sql", { dockerConfig, sqlPath: out });
+          const warnings1 = await invoke<string[]>("run_sql", { dockerConfig, sqlPath: out });
+          if (warnings1.length > 0) { addLog(`MySQL warnings:\n${warnings1.join("\n")}`); }
           addLog("Import complete!");
         }
       } else {
@@ -54,7 +60,9 @@ export function Execute({ mode, condenseConfig, dockerConfig, sqlPath, onComplet
         if (s.errors.length > 0) throw new Error(s.errors.join("\n"));
         addLog("Pre-flight checks passed.");
         setPhase("importing"); addLog("Starting MySQL import...");
-        await invoke("run_sql", { dockerConfig, sqlPath }); addLog("Import complete!");
+        const warnings2 = await invoke<string[]>("run_sql", { dockerConfig, sqlPath });
+        if (warnings2.length > 0) { addLog(`MySQL warnings:\n${warnings2.join("\n")}`); }
+        addLog("Import complete!");
       }
       setDone(true); setPhase("complete"); addLog("All operations completed successfully.");
     } catch (e) {

@@ -1,4 +1,5 @@
 use crate::condenser::TableAction;
+use crate::docker::DefinerOverride;
 use crate::error::AppError;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -15,6 +16,10 @@ pub struct Template {
     pub aws_profile: Option<String>,
     pub download_directory: Option<String>,
     pub table_configs: HashMap<String, TableAction>,
+    #[serde(default)]
+    pub definer_override: Option<DefinerOverride>,
+    #[serde(default)]
+    pub drop_existing_data: bool,
     #[serde(default)]
     pub last_used: Option<String>,
 }

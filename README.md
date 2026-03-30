@@ -9,7 +9,6 @@ Built with **Tauri v2** (Rust backend + React/TypeScript frontend) for native pe
 - **Rust** (via [rustup](https://rustup.rs/))
 - **Node.js** v18+ (via [nvm](https://github.com/nvm-sh/nvm) recommended)
 - **Docker Desktop** (for MySQL import functionality)
-- **pv** (`brew install pv`) — used for import progress tracking
 - **AWS CLI** (optional, for configuring AWS credentials)
 
 ## Setup
@@ -81,11 +80,16 @@ After scanning, you'll see all tables with their estimated sizes and row counts:
 - **Run SQL Only**: Imports any `.sql` file into Docker MySQL (not limited to condensed files)
 - **Condense & Run**: Condenses then imports in one step
 
+### Definer Override
+
+MySQL dumps often contain `DEFINER` clauses in views, triggers, and stored procedures that reference production users/hosts not present in your local database. Enable **Override SQL DEFINER** in the Docker Import Settings to replace these with a local user (e.g., `root@localhost`). This applies during both condensing and direct import, and is saved in templates.
+
 ### Templates
 
 Save your table configurations as reusable templates. Templates store:
 - Table inclusion/exclusion settings and row limits
 - Database name, Docker Compose path, service name
+- Definer override settings
 - S3 URI and AWS profile (for scheduled downloads)
 
 Export/import templates as JSON to share with team members.
@@ -104,7 +108,7 @@ Scheduled tasks run without the app open and send macOS notifications on complet
 | Issue | Solution |
 |-------|----------|
 | Docker not running | Start Docker Desktop |
-| `pv` not installed | `brew install pv` |
+| Import fails with DEFINER error | Enable "Override SQL DEFINER" in Docker Import Settings with your local MySQL user |
 | AWS credentials invalid | Check `.env` file at `~/Library/Application Support/database-update/.env` or run `aws configure` |
 | S3 access denied | Verify your credentials have `s3:GetObject` permission on the bucket |
 | Container not found | Ensure MySQL container is running: `docker compose up -d mysql` |

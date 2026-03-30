@@ -1,3 +1,4 @@
+use crate::docker::DefinerOverride;
 use crate::error::AppError;
 use crate::parser::{self, LineType};
 use crate::progress::{Phase, ProgressTracker};
@@ -12,6 +13,8 @@ pub struct CondenseConfig {
     pub source_path: PathBuf,
     pub output_path: PathBuf,
     pub table_configs: HashMap<String, TableAction>,
+    #[serde(default)]
+    pub definer_override: Option<DefinerOverride>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -89,6 +92,16 @@ pub fn condense(config: &CondenseConfig, app: &AppHandle) -> Result<PathBuf, App
     let mut tracker = ProgressTracker::new(Phase::Condensing, file_size);
     let mut current_table: Option<String> = None;
 
+    // Closure to apply definer replacement if configured
+    let transform_line = |line: &str| -> String {
+        if let Some(ref d) = config.definer_override {
+            if line.contains("DEFINER=") {
+                return crate::docker::replace_definer(line, &d.user, &d.host);
+            }
+        }
+        line.to_string()
+    };
+
     for line_result in reader.lines() {
         let line = line_result?;
         let line_bytes = line.len() as u64 + 1;
@@ -107,7 +120,7 @@ pub fn condense(config: &CondenseConfig, app: &AppHandle) -> Result<PathBuf, App
 
                 match action {
                     TableAction::IncludeAll => {
-                        writeln!(writer, "{}", line)?;
+                        writeln!(writer, "{}", transform_line(&line))?;
                     }
                     TableAction::ExcludeData => {
                         // Skip this INSERT line entirely
@@ -125,7 +138,7 @@ pub fn condense(config: &CondenseConfig, app: &AppHandle) -> Result<PathBuf, App
                 if let Some(ref table) = current_table {
                     if let Some(buffer) = rolling_buffers.get(table) {
                         if let Some(insert_stmt) = buffer.flush() {
-                            writeln!(writer, "{}", insert_stmt)?;
+                            writeln!(writer, "{}", transform_line(&insert_stmt))?;
                         }
                     }
                     // Clear the buffer after flushing
@@ -133,7 +146,7 @@ pub fn condense(config: &CondenseConfig, app: &AppHandle) -> Result<PathBuf, App
                         buffer.tuples.clear();
                     }
                 }
-                writeln!(writer, "{}", line)?;
+                writeln!(writer, "{}", transform_line(&line))?;
                 current_table = None;
             }
             LineType::DropTable(table_name) => {
@@ -142,7 +155,7 @@ pub fn condense(config: &CondenseConfig, app: &AppHandle) -> Result<PathBuf, App
                     if prev_table != table_name {
                         if let Some(buffer) = rolling_buffers.get(prev_table) {
                             if let Some(insert_stmt) = buffer.flush() {
-                                writeln!(writer, "{}", insert_stmt)?;
+                                writeln!(writer, "{}", transform_line(&insert_stmt))?;
                             }
                         }
                         if let Some(buffer) = rolling_buffers.get_mut(prev_table) {
@@ -151,11 +164,11 @@ pub fn condense(config: &CondenseConfig, app: &AppHandle) -> Result<PathBuf, App
                     }
                 }
                 current_table = Some(table_name.clone());
-                writeln!(writer, "{}", line)?;
+                writeln!(writer, "{}", transform_line(&line))?;
             }
             _ => {
                 // All non-INSERT lines pass through (DDL, views, procedures, etc.)
-                writeln!(writer, "{}", line)?;
+                writeln!(writer, "{}", transform_line(&line))?;
             }
         }
 
@@ -172,7 +185,7 @@ pub fn condense(config: &CondenseConfig, app: &AppHandle) -> Result<PathBuf, App
     // Flush any remaining buffers (edge case: file doesn't end with UNLOCK)
     for (_, buffer) in &rolling_buffers {
         if let Some(insert_stmt) = buffer.flush() {
-            writeln!(writer, "{}", insert_stmt)?;
+            writeln!(writer, "{}", transform_line(&insert_stmt))?;
         }
     }
 

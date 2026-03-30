@@ -1,4 +1,4 @@
-import { Container, Server, Database } from "lucide-react";
+import { Container, Server, Database, UserCog, Trash2 } from "lucide-react";
 import type { DockerConfig } from "../types";
 
 interface DatabaseConfigProps {
@@ -7,6 +7,16 @@ interface DatabaseConfigProps {
 }
 
 export function DatabaseConfig({ config, onChange }: DatabaseConfigProps) {
+  const definerEnabled = !!config.definer_override;
+
+  const toggleDefiner = () => {
+    if (definerEnabled) {
+      onChange({ ...config, definer_override: null });
+    } else {
+      onChange({ ...config, definer_override: { user: "root", host: "localhost" } });
+    }
+  };
+
   return (
     <div>
       <div className="flex items-center" style={{ gap: 10, marginBottom: 16 }}>
@@ -41,6 +51,66 @@ export function DatabaseConfig({ config, onChange }: DatabaseConfigProps) {
             onChange={(e) => onChange({ ...config, service_name: e.target.value })}
             placeholder="mysql" className="w-full" />
         </div>
+      </div>
+
+      {/* Import Options */}
+      <div style={{ marginTop: 20, display: "flex", flexDirection: "column", gap: 12 }}>
+        <label className="flex items-center cursor-pointer" style={{ gap: 8 }}>
+          <input
+            type="checkbox"
+            checked={config.drop_existing_data ?? false}
+            onChange={(e) => onChange({ ...config, drop_existing_data: e.target.checked })}
+            className="accent-accent"
+            style={{ width: 14, height: 14 }}
+          />
+          <span className="flex items-center text-text-secondary" style={{ gap: 6, fontSize: 12, fontWeight: 500 }}>
+            <Trash2 size={12} />
+            Drop existing tables before import
+          </span>
+          <span className="text-text-tertiary" style={{ fontSize: 11 }}>
+            Removes all existing tables and views from the database first
+          </span>
+        </label>
+      </div>
+
+      {/* Definer Override */}
+      <div style={{ marginTop: 12 }}>
+        <label className="flex items-center cursor-pointer" style={{ gap: 8 }}>
+          <input
+            type="checkbox"
+            checked={definerEnabled}
+            onChange={toggleDefiner}
+            className="accent-accent"
+            style={{ width: 14, height: 14 }}
+          />
+          <span className="flex items-center text-text-secondary" style={{ gap: 6, fontSize: 12, fontWeight: 500 }}>
+            <UserCog size={12} />
+            Override SQL DEFINER
+          </span>
+          <span className="text-text-tertiary" style={{ fontSize: 11 }}>
+            Replace DEFINER user/host in views, triggers, and procedures
+          </span>
+        </label>
+        {definerEnabled && config.definer_override && (
+          <div className="grid grid-cols-2" style={{ gap: 20, marginTop: 12, maxWidth: 440 }}>
+            <div>
+              <label className="text-text-secondary" style={{ fontSize: 12, fontWeight: 500, marginBottom: 8, display: "block" }}>
+                User
+              </label>
+              <input type="text" value={config.definer_override.user}
+                onChange={(e) => onChange({ ...config, definer_override: { ...config.definer_override!, user: e.target.value } })}
+                placeholder="root" className="w-full" />
+            </div>
+            <div>
+              <label className="text-text-secondary" style={{ fontSize: 12, fontWeight: 500, marginBottom: 8, display: "block" }}>
+                Host
+              </label>
+              <input type="text" value={config.definer_override.host}
+                onChange={(e) => onChange({ ...config, definer_override: { ...config.definer_override!, host: e.target.value } })}
+                placeholder="localhost" className="w-full" />
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -78,6 +78,8 @@ export function Configure({
     compose_file_path: initialTemplate?.compose_file_path ?? "",
     service_name: initialTemplate?.service_name ?? "mysql",
     database_name: initialTemplate?.database_name ?? "",
+    definer_override: initialTemplate?.definer_override ?? null,
+    drop_existing_data: initialTemplate?.drop_existing_data ?? false,
   });
 
   const [cascadeModal, setCascadeModal] = useState<{
@@ -193,6 +195,7 @@ export function Configure({
 
   const buildCondenseConfig = (): CondenseConfig => ({
     source_path: filePath, output_path: outputPath, table_configs: { ...tableActions },
+    definer_override: dockerConfig.definer_override ?? null,
   });
 
   const handleSaveTemplate = async () => {
@@ -202,6 +205,8 @@ export function Configure({
       name, database_name: dockerConfig.database_name, compose_file_path: dockerConfig.compose_file_path,
       service_name: dockerConfig.service_name, output_directory: outputPath.substring(0, outputPath.lastIndexOf("/")),
       s3_uri: null, aws_profile: null, download_directory: null, table_configs: { ...tableActions },
+      definer_override: dockerConfig.definer_override ?? null,
+      drop_existing_data: dockerConfig.drop_existing_data ?? false,
       last_used: new Date().toISOString(),
     };
     try { await invoke("save_template", { template }); } catch (e) { console.error(e); }
