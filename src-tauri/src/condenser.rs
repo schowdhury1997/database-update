@@ -8,6 +8,10 @@ use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::path::PathBuf;
 use tauri::AppHandle;
 
+/// Hard upper limit for IncludeLastN to prevent OOM on wide tables.
+/// 100K rows is generous for any reasonable "tail sampling" use case.
+const MAX_LAST_N: u64 = 100_000;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CondenseConfig {
     pub source_path: PathBuf,
@@ -62,29 +66,36 @@ impl RollingBuffer {
         }
     }
 
-    fn flush(&self) -> Option<String> {
+    fn flush_to<W: Write>(&self, writer: &mut W) -> Result<bool, std::io::Error> {
         if self.tuples.is_empty() || self.insert_prefix.is_empty() {
-            return None;
+            return Ok(false);
         }
-        let joined: Vec<&str> = self.tuples.iter().map(|s| s.as_str()).collect();
-        Some(format!("{}{};", self.insert_prefix, joined.join(",")))
+        writer.write_all(self.insert_prefix.as_bytes())?;
+        for (i, tuple) in self.tuples.iter().enumerate() {
+            if i > 0 {
+                writer.write_all(b",")?;
+            }
+            writer.write_all(tuple.as_bytes())?;
+        }
+        writer.write_all(b";\n")?;
+        Ok(true)
     }
 }
 
 pub fn condense(config: &CondenseConfig, app: &AppHandle) -> Result<PathBuf, AppError> {
     let source = std::fs::File::open(&config.source_path)?;
     let file_size = source.metadata()?.len();
-    let reader = BufReader::with_capacity(8 * 1024 * 1024, source);
+    let mut reader = BufReader::with_capacity(8 * 1024 * 1024, source);
 
     let output = std::fs::File::create(&config.output_path)?;
     let mut writer = BufWriter::with_capacity(8 * 1024 * 1024, output);
 
     let mut rolling_buffers: HashMap<String, RollingBuffer> = HashMap::new();
 
-    // Pre-create rolling buffers for IncludeLastN tables
+    // Pre-create rolling buffers for IncludeLastN tables (clamped to MAX_LAST_N)
     for (table, action) in &config.table_configs {
         if let TableAction::IncludeLastN(n) = action {
-            rolling_buffers.insert(table.clone(), RollingBuffer::new(*n));
+            rolling_buffers.insert(table.clone(), RollingBuffer::new((*n).min(MAX_LAST_N)));
         }
     }
 
@@ -102,12 +113,17 @@ pub fn condense(config: &CondenseConfig, app: &AppHandle) -> Result<PathBuf, App
         line.to_string()
     };
 
-    for line_result in reader.lines() {
-        let line = line_result?;
-        let line_bytes = line.len() as u64 + 1;
-        bytes_read += line_bytes;
+    let mut line_buf = String::new();
+    loop {
+        line_buf.clear();
+        let bytes_this_line = reader.read_line(&mut line_buf)?;
+        if bytes_this_line == 0 {
+            break; // EOF
+        }
+        bytes_read += bytes_this_line as u64;
+        let line = line_buf.trim_end_matches(&['\n', '\r'][..]);
 
-        let line_type = parser::classify_line(&line);
+        let line_type = parser::classify_line(line);
 
         match &line_type {
             LineType::InsertInto(table_name) => {
@@ -135,11 +151,10 @@ pub fn condense(config: &CondenseConfig, app: &AppHandle) -> Result<PathBuf, App
             }
             LineType::UnlockTables => {
                 // Before writing UNLOCK, flush any pending rolling buffer
+                // (INSERT data never contains DEFINER=, so no transform needed)
                 if let Some(ref table) = current_table {
                     if let Some(buffer) = rolling_buffers.get(table) {
-                        if let Some(insert_stmt) = buffer.flush() {
-                            writeln!(writer, "{}", transform_line(&insert_stmt))?;
-                        }
+                        buffer.flush_to(&mut writer)?;
                     }
                     // Clear the buffer after flushing
                     if let Some(buffer) = rolling_buffers.get_mut(table) {
@@ -154,9 +169,7 @@ pub fn condense(config: &CondenseConfig, app: &AppHandle) -> Result<PathBuf, App
                 if let Some(ref prev_table) = current_table {
                     if prev_table != table_name {
                         if let Some(buffer) = rolling_buffers.get(prev_table) {
-                            if let Some(insert_stmt) = buffer.flush() {
-                                writeln!(writer, "{}", transform_line(&insert_stmt))?;
-                            }
+                            buffer.flush_to(&mut writer)?;
                         }
                         if let Some(buffer) = rolling_buffers.get_mut(prev_table) {
                             buffer.tuples.clear();
@@ -183,9 +196,12 @@ pub fn condense(config: &CondenseConfig, app: &AppHandle) -> Result<PathBuf, App
     }
 
     // Flush any remaining buffers (edge case: file doesn't end with UNLOCK)
-    for (_, buffer) in &rolling_buffers {
-        if let Some(insert_stmt) = buffer.flush() {
-            writeln!(writer, "{}", transform_line(&insert_stmt))?;
+    // Sort by table name for deterministic output order
+    let mut remaining_tables: Vec<&String> = rolling_buffers.keys().collect();
+    remaining_tables.sort();
+    for table_name in remaining_tables {
+        if let Some(buffer) = rolling_buffers.get(table_name) {
+            buffer.flush_to(&mut writer)?;
         }
     }
 

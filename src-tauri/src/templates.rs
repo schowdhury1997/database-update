@@ -33,9 +33,17 @@ fn templates_dir() -> PathBuf {
     base
 }
 
-fn template_path(name: &str) -> PathBuf {
-    let safe_name = name.replace(['/', '\\', ' '], "_");
-    templates_dir().join(format!("{}.json", safe_name))
+fn template_path(name: &str) -> Result<PathBuf, AppError> {
+    let safe_name = name.replace(['/', '\\', ' ', '.'], "_");
+    if safe_name.is_empty() || safe_name.chars().all(|c| c == '_') {
+        return Err(AppError::Template("Invalid template name".into()));
+    }
+    let path = templates_dir().join(format!("{}.json", safe_name));
+    // Verify the resolved path is still inside the templates directory
+    if path.parent() != Some(&templates_dir()) {
+        return Err(AppError::Template("Invalid template name".into()));
+    }
+    Ok(path)
 }
 
 pub fn list_templates() -> Result<Vec<Template>, AppError> {
@@ -61,14 +69,14 @@ pub fn list_templates() -> Result<Vec<Template>, AppError> {
 }
 
 pub fn save_template(template: &Template) -> Result<(), AppError> {
-    let path = template_path(&template.name);
+    let path = template_path(&template.name)?;
     let json = serde_json::to_string_pretty(template)?;
     std::fs::write(&path, json)?;
     Ok(())
 }
 
 pub fn load_template(name: &str) -> Result<Template, AppError> {
-    let path = template_path(name);
+    let path = template_path(name)?;
     if !path.exists() {
         return Err(AppError::Template(format!(
             "Template '{}' not found",
@@ -81,7 +89,7 @@ pub fn load_template(name: &str) -> Result<Template, AppError> {
 }
 
 pub fn delete_template(name: &str) -> Result<(), AppError> {
-    let path = template_path(name);
+    let path = template_path(name)?;
     if path.exists() {
         std::fs::remove_file(path)?;
     }
@@ -98,6 +106,8 @@ pub fn export_template(name: &str, export_path: &Path) -> Result<(), AppError> {
 pub fn import_template(import_path: &Path) -> Result<Template, AppError> {
     let content = std::fs::read_to_string(import_path)?;
     let template: Template = serde_json::from_str(&content)?;
+    // Validate that the embedded name is safe before saving
+    template_path(&template.name)?;
     save_template(&template)?;
     Ok(template)
 }

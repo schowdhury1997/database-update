@@ -212,7 +212,10 @@ export function Configure({
     try { await invoke("save_template", { template }); } catch (e) { console.error(e); }
   };
 
-  const checkedCount = checkedTables.size + fkLocks.filter((l) => l.locked).length;
+  const checkedCount = new Set([
+    ...checkedTables,
+    ...fkLocks.filter((l) => l.locked).map((l) => l.table),
+  ]).size;
 
   return (
     <div className="h-full flex flex-col overflow-hidden">

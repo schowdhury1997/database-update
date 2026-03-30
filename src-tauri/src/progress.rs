@@ -50,7 +50,7 @@ impl ProgressTracker {
 
     pub fn should_emit(&self, bytes_processed: u64) -> bool {
         let time_elapsed = self.last_emit_time.elapsed().as_secs_f64() >= 2.0;
-        let bytes_elapsed = bytes_processed - self.last_emit_bytes >= self.emit_interval_bytes;
+        let bytes_elapsed = bytes_processed.saturating_sub(self.last_emit_bytes) >= self.emit_interval_bytes;
         time_elapsed || bytes_elapsed
     }
 

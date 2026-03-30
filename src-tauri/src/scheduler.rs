@@ -164,6 +164,15 @@ pub fn delete_schedule(id: &str) -> Result<(), AppError> {
     Ok(())
 }
 
+/// Escape special XML characters to prevent injection in plist generation.
+fn xml_escape(s: &str) -> String {
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&apos;")
+}
+
 fn generate_plist(
     label: &str,
     binary_path: &str,
@@ -191,9 +200,9 @@ fn generate_plist(
         <string>{}</string>
         <string>--action</string>
         <string>{}</string>"#,
-        binary_path,
-        template_path.display(),
-        action_str,
+        xml_escape(binary_path),
+        xml_escape(&template_path.display().to_string()),
+        xml_escape(action_str),
     );
 
     if let Some(src) = source_path {
@@ -201,7 +210,7 @@ fn generate_plist(
             r#"
         <string>--source</string>
         <string>{}</string>"#,
-            src
+            xml_escape(src)
         ));
     }
 
@@ -250,6 +259,9 @@ fn generate_plist(
 
     let log_dir = logs_dir();
 
+    let log_dir_escaped = xml_escape(&log_dir.display().to_string());
+    let task_id_escaped = xml_escape(task_id);
+
     format!(
         r#"<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -268,12 +280,12 @@ fn generate_plist(
     <string>{}/{}.err</string>
 </dict>
 </plist>"#,
-        label,
+        xml_escape(label),
         args,
         calendar_interval,
-        log_dir.display(),
-        task_id,
-        log_dir.display(),
-        task_id,
+        log_dir_escaped,
+        task_id_escaped,
+        log_dir_escaped,
+        task_id_escaped,
     )
 }

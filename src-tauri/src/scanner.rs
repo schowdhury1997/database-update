@@ -38,7 +38,7 @@ pub struct ForeignKeyGraphData {
 pub fn scan_file(path: &Path, app: &AppHandle) -> Result<ScanResult, AppError> {
     let file = std::fs::File::open(path)?;
     let file_size = file.metadata()?.len();
-    let reader = BufReader::with_capacity(8 * 1024 * 1024, file);
+    let mut reader = BufReader::with_capacity(8 * 1024 * 1024, file);
 
     let mut tables: Vec<TableInfo> = Vec::new();
     let mut table_map: HashMap<String, usize> = HashMap::new();
@@ -52,12 +52,17 @@ pub fn scan_file(path: &Path, app: &AppHandle) -> Result<ScanResult, AppError> {
     let mut bytes_read: u64 = 0;
     let mut tracker = ProgressTracker::new(Phase::Scanning, file_size);
 
-    for line_result in reader.lines() {
-        let line = line_result?;
-        let line_bytes = line.len() as u64 + 1; // +1 for newline
-        bytes_read += line_bytes;
+    let mut line_buf = String::new();
+    loop {
+        line_buf.clear();
+        let bytes_this_line = reader.read_line(&mut line_buf)?;
+        if bytes_this_line == 0 {
+            break; // EOF
+        }
+        bytes_read += bytes_this_line as u64;
+        let line = line_buf.trim_end_matches(&['\n', '\r'][..]);
 
-        let line_type = parser::classify_line(&line);
+        let line_type = parser::classify_line(line);
 
         match line_type {
             LineType::CreateTable(name) => {
@@ -102,7 +107,7 @@ pub fn scan_file(path: &Path, app: &AppHandle) -> Result<ScanResult, AppError> {
             LineType::InsertInto(ref table_name) => {
                 let data_bytes = line.len() as u64;
                 // Count approximate rows by counting ),( patterns and trailing );
-                let row_count = count_tuples_approx(&line);
+                let row_count = count_tuples_approx(line);
 
                 if let Some(&idx) = table_map.get(table_name) {
                     tables[idx].estimated_data_bytes += data_bytes;
@@ -156,9 +161,11 @@ fn count_tuples_approx(line: &str) -> u64 {
     let mut in_string = false;
     let mut escape_next = false;
 
-    for i in 0..bytes.len() {
+    let mut i = 0;
+    while i < bytes.len() {
         if escape_next {
             escape_next = false;
+            i += 1;
             continue;
         }
         if in_string {
@@ -166,13 +173,16 @@ fn count_tuples_approx(line: &str) -> u64 {
                 b'\\' => escape_next = true,
                 b'\'' => {
                     if i + 1 < bytes.len() && bytes[i + 1] == b'\'' {
-                        escape_next = true;
+                        // Doubled-quote escape: skip both quotes, stay in string
+                        i += 2;
+                        continue;
                     } else {
                         in_string = false;
                     }
                 }
                 _ => {}
             }
+            i += 1;
             continue;
         }
         match bytes[i] {
@@ -185,6 +195,7 @@ fn count_tuples_approx(line: &str) -> u64 {
             }
             _ => {}
         }
+        i += 1;
     }
     count
 }

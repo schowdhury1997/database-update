@@ -31,45 +31,46 @@ export function Execute({ mode, condenseConfig, dockerConfig, sqlPath, onComplet
   useEffect(() => {
     if (hasStarted.current) return;
     hasStarted.current = true;
-    run();
-  }, []);
 
-  const run = async () => {
-    try {
-      if (mode === "condense" || mode === "condense_and_run") {
-        if (!condenseConfig) throw new Error("Missing condense config");
-        if (mode === "condense_and_run" && dockerConfig) {
+    const run = async () => {
+      try {
+        if (mode === "condense" || mode === "condense_and_run") {
+          if (!condenseConfig) throw new Error("Missing condense config");
+          if (mode === "condense_and_run" && dockerConfig) {
+            setPhase("preflight"); addLog("Running pre-flight checks...");
+            const s = await invoke<{ errors: string[] }>("preflight_check", { dockerConfig });
+            if (s.errors.length > 0) throw new Error(s.errors.join("\n"));
+            addLog("Pre-flight checks passed.");
+          }
+          setPhase("condensing"); addLog("Starting condensing...");
+          const out = await invoke<string>("condense", { config: condenseConfig });
+          setResultPath(out); addLog(`Condensed file: ${out}`);
+          if (mode === "condense_and_run" && dockerConfig) {
+            setPhase("importing"); addLog("Starting MySQL import...");
+            const warnings1 = await invoke<string[]>("run_sql", { dockerConfig, sqlPath: out });
+            if (warnings1.length > 0) { addLog(`MySQL warnings:\n${warnings1.join("\n")}`); }
+            addLog("Import complete!");
+          }
+        } else {
+          if (!dockerConfig || !sqlPath) throw new Error("Missing config");
           setPhase("preflight"); addLog("Running pre-flight checks...");
           const s = await invoke<{ errors: string[] }>("preflight_check", { dockerConfig });
           if (s.errors.length > 0) throw new Error(s.errors.join("\n"));
           addLog("Pre-flight checks passed.");
-        }
-        setPhase("condensing"); addLog("Starting condensing...");
-        const out = await invoke<string>("condense", { config: condenseConfig });
-        setResultPath(out); addLog(`Condensed file: ${out}`);
-        if (mode === "condense_and_run" && dockerConfig) {
           setPhase("importing"); addLog("Starting MySQL import...");
-          const warnings1 = await invoke<string[]>("run_sql", { dockerConfig, sqlPath: out });
-          if (warnings1.length > 0) { addLog(`MySQL warnings:\n${warnings1.join("\n")}`); }
+          const warnings2 = await invoke<string[]>("run_sql", { dockerConfig, sqlPath });
+          if (warnings2.length > 0) { addLog(`MySQL warnings:\n${warnings2.join("\n")}`); }
           addLog("Import complete!");
         }
-      } else {
-        if (!dockerConfig || !sqlPath) throw new Error("Missing config");
-        setPhase("preflight"); addLog("Running pre-flight checks...");
-        const s = await invoke<{ errors: string[] }>("preflight_check", { dockerConfig });
-        if (s.errors.length > 0) throw new Error(s.errors.join("\n"));
-        addLog("Pre-flight checks passed.");
-        setPhase("importing"); addLog("Starting MySQL import...");
-        const warnings2 = await invoke<string[]>("run_sql", { dockerConfig, sqlPath });
-        if (warnings2.length > 0) { addLog(`MySQL warnings:\n${warnings2.join("\n")}`); }
-        addLog("Import complete!");
+        setDone(true); setPhase("complete"); addLog("All operations completed successfully.");
+      } catch (e) {
+        const msg = typeof e === "string" ? e : (e as Error).message ?? String(e);
+        setError(msg); addLog(`ERROR: ${msg}`);
       }
-      setDone(true); setPhase("complete"); addLog("All operations completed successfully.");
-    } catch (e) {
-      const msg = typeof e === "string" ? e : (e as Error).message ?? String(e);
-      setError(msg); addLog(`ERROR: ${msg}`);
-    }
-  };
+    };
+
+    run();
+  }, [mode, condenseConfig, dockerConfig, sqlPath]);
 
   const phases = mode === "condense" ? ["condensing"] : mode === "run" ? ["preflight", "importing"] : ["preflight", "condensing", "importing"];
   const order = ["starting", "preflight", "condensing", "importing", "complete"];
@@ -168,7 +169,7 @@ export function Execute({ mode, condenseConfig, dockerConfig, sqlPath, onComplet
             <button onClick={onComplete}
               className="flex items-center rounded-lg text-white bg-accent hover:bg-accent-hover font-medium transition-colors shadow-sm self-start"
               style={{ gap: 10, padding: "12px 24px", fontSize: 14 }}>
-              <ArrowLeft size={16} /> {done ? "Back to Home" : "Try Again"}
+              <ArrowLeft size={16} /> Back to Home
             </button>
           )}
         </div>

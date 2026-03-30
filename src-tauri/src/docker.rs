@@ -264,24 +264,33 @@ pub async fn run_sql(
 
     if needs_line_processing {
         // Line-by-line streaming with optional transformations
-        let reader = BufReader::with_capacity(8 * 1024 * 1024, file);
+        let mut reader = BufReader::with_capacity(8 * 1024 * 1024, file);
         let definer = config.definer_override.as_ref();
         let fix_creates = config.drop_existing_data;
         let mut inside_lock = false;
+        let mut line_buf = String::new();
 
-        for line_result in reader.lines() {
-            let line = line_result?;
-            bytes_read += line.len() as u64 + 1;
+        loop {
+            line_buf.clear();
+            let bytes_this_line = reader.read_line(&mut line_buf)?;
+            if bytes_this_line == 0 {
+                break; // EOF
+            }
+            bytes_read += bytes_this_line as u64;
 
-            let mut output_line = line;
+            let mut output_line = line_buf.trim_end_matches(&['\n', '\r'][..]).to_string();
 
             // Track LOCK/UNLOCK state — DDL (DROP/CREATE) is forbidden inside
             // LOCK TABLES blocks, so we must skip injection while locked.
             {
-                let trimmed_upper = output_line.trim_start().to_uppercase();
-                if trimmed_upper.starts_with("LOCK TABLES") {
+                let trimmed = output_line.trim_start();
+                if trimmed.len() >= 11
+                    && trimmed.as_bytes()[..11].eq_ignore_ascii_case(b"LOCK TABLES")
+                {
                     inside_lock = true;
-                } else if trimmed_upper.starts_with("UNLOCK TABLES") {
+                } else if trimmed.len() >= 13
+                    && trimmed.as_bytes()[..13].eq_ignore_ascii_case(b"UNLOCK TABLES")
+                {
                     inside_lock = false;
                 }
             }
@@ -293,8 +302,12 @@ pub async fn run_sql(
             }
 
             if fix_creates && !inside_lock {
-                let upper = output_line.to_uppercase();
-                if upper.contains("CREATE TABLE ") {
+                // Use ASCII case-insensitive checks to avoid allocating an uppercase copy per line
+                let has_create_table = output_line
+                    .as_bytes()
+                    .windows(13)
+                    .any(|w| w.eq_ignore_ascii_case(b"CREATE TABLE "));
+                if has_create_table {
                     // Inject DROP TABLE IF EXISTS before each CREATE TABLE so existing
                     // tables are replaced cleanly. Done inline (not in a preamble) to
                     // avoid dropping objects the dump references before recreating.
@@ -304,14 +317,20 @@ pub async fn run_sql(
                     // Also add IF NOT EXISTS as a safety net in case the DROP injection
                     // fails (e.g., table name couldn't be extracted). This makes duplicate
                     // or guard-less CREATE TABLE statements harmless.
-                    if !upper.contains("IF NOT EXISTS") {
+                    let has_if_not_exists = output_line
+                        .as_bytes()
+                        .windows(13)
+                        .any(|w| w.eq_ignore_ascii_case(b"IF NOT EXISTS"));
+                    if !has_if_not_exists {
                         output_line = output_line.replacen("CREATE TABLE ", "CREATE TABLE IF NOT EXISTS ", 1);
                         // Handle lowercase variant
                         if !output_line.contains("IF NOT EXISTS") {
                             output_line = output_line.replacen("create table ", "create table IF NOT EXISTS ", 1);
                         }
                     }
-                } else if upper.contains(" VIEW ") && upper.contains("CREATE") {
+                } else if output_line.as_bytes().windows(6).any(|w| w.eq_ignore_ascii_case(b" VIEW "))
+                    && output_line.as_bytes().windows(6).any(|w| w.eq_ignore_ascii_case(b"CREATE"))
+                {
                     // Inject DROP VIEW IF EXISTS before CREATE VIEW statements
                     if let Some(view_name) = extract_create_view_name(&output_line) {
                         let _ = writeln!(stdin, "DROP VIEW IF EXISTS `{}`;", view_name);

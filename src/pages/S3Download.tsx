@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Cloud, Archive, CheckCircle2, XCircle } from "lucide-react";
 import { ProgressBar } from "../components/ProgressBar";
@@ -16,31 +16,39 @@ export function S3Download({ s3Uri, awsProfile, onComplete, onCancel }: S3Downlo
   const progress = useProgress();
   const [phase, setPhase] = useState<"downloading" | "extracting">("downloading");
   const [error, setError] = useState<string | null>(null);
+  const cancelledRef = useRef(false);
 
   useEffect(() => {
-    startDownload();
-  }, []);
+    cancelledRef.current = false;
 
-  const startDownload = async () => {
-    try {
-      const prefs = await invoke<Preferences>("get_preferences");
-      setPhase("downloading");
-      const gzPath = await invoke<string>("download_from_s3", {
-        s3Uri,
-        downloadDir: prefs.download_directory,
-        profile: awsProfile ?? undefined,
-      });
-      if (gzPath.endsWith(".gz")) {
-        setPhase("extracting");
-        const sqlPath = await invoke<string>("extract_gz", { path: gzPath });
-        onComplete(sqlPath);
-      } else {
-        onComplete(gzPath);
+    const startDownload = async () => {
+      try {
+        const prefs = await invoke<Preferences>("get_preferences");
+        if (cancelledRef.current) return;
+        setPhase("downloading");
+        const gzPath = await invoke<string>("download_from_s3", {
+          s3Uri,
+          downloadDir: prefs.download_directory,
+          profile: awsProfile ?? undefined,
+        });
+        if (cancelledRef.current) return;
+        if (gzPath.endsWith(".gz")) {
+          setPhase("extracting");
+          const sqlPath = await invoke<string>("extract_gz", { path: gzPath });
+          if (cancelledRef.current) return;
+          onComplete(sqlPath);
+        } else {
+          onComplete(gzPath);
+        }
+      } catch (e) {
+        if (cancelledRef.current) return;
+        setError(typeof e === "string" ? e : String(e));
       }
-    } catch (e) {
-      setError(typeof e === "string" ? e : String(e));
-    }
-  };
+    };
+
+    startDownload();
+    return () => { cancelledRef.current = true; };
+  }, [s3Uri, awsProfile, onComplete]);
 
   const cur = progress;
   const isDownloading = phase === "downloading" && cur?.phase === "downloading";

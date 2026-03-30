@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Search, XCircle, Loader2 } from "lucide-react";
 import { ProgressBar } from "../components/ProgressBar";
@@ -15,11 +15,14 @@ export function Scanning({ filePath, onComplete, onCancel }: ScanningProps) {
   const progress = useProgress();
   const [error, setError] = useState<string | null>(null);
 
+  const cancelledRef = useRef(false);
   useEffect(() => {
+    cancelledRef.current = false;
     invoke<ScanResult>("scan_file", { path: filePath })
-      .then(onComplete)
-      .catch((e) => setError(typeof e === "string" ? e : String(e)));
-  }, [filePath]);
+      .then((result) => { if (!cancelledRef.current) onComplete(result); })
+      .catch((e) => { if (!cancelledRef.current) setError(typeof e === "string" ? e : String(e)); });
+    return () => { cancelledRef.current = true; };
+  }, [filePath, onComplete]);
 
   return (
     <div className="h-full flex flex-col overflow-y-auto">
