@@ -7,7 +7,7 @@ import type { Preferences } from "../types";
 
 interface S3DownloadProps {
   s3Uri: string;
-  awsProfile: string;
+  awsProfile: string | null;
   onComplete: (sqlPath: string) => void;
   onCancel: () => void;
 }
@@ -28,7 +28,7 @@ export function S3Download({ s3Uri, awsProfile, onComplete, onCancel }: S3Downlo
       const gzPath = await invoke<string>("download_from_s3", {
         s3Uri,
         downloadDir: prefs.download_directory,
-        profile: awsProfile,
+        profile: awsProfile ?? undefined,
       });
       if (gzPath.endsWith(".gz")) {
         setPhase("extracting");

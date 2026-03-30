@@ -116,6 +116,14 @@ pub async fn check_aws_credentials(profile: Option<String>) -> Result<bool, AppE
 }
 
 #[tauri::command]
+pub fn has_env_credentials() -> bool {
+    let app_support = dirs::data_dir()
+        .unwrap_or_else(|| PathBuf::from("~"))
+        .join("database-update");
+    crate::s3::has_env_credentials(&app_support)
+}
+
+#[tauri::command]
 pub fn list_aws_profiles() -> Vec<String> {
     crate::s3::list_aws_profiles()
 }

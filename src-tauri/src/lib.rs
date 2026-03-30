@@ -28,6 +28,7 @@ pub fn run() {
             commands::download_from_s3,
             commands::extract_gz,
             commands::check_aws_credentials,
+            commands::has_env_credentials,
             commands::list_aws_profiles,
             commands::list_templates,
             commands::save_template,

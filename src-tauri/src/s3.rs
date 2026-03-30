@@ -219,6 +219,11 @@ pub async fn check_credentials(
     profile: Option<&str>,
     app_support_dir: &Path,
 ) -> Result<bool, AppError> {
+    // Short-circuit: if .env has credentials, they're usable without SDK validation
+    if has_env_credentials(app_support_dir) {
+        return Ok(true);
+    }
+
     let config = resolve_aws_config(profile, app_support_dir).await?;
     let provider = config.credentials_provider();
     match provider {
@@ -232,6 +237,28 @@ pub async fn check_credentials(
             }
         }
         None => Ok(false),
+    }
+}
+
+/// Check if .env file contains AWS credentials (without involving AWS SDK).
+pub fn has_env_credentials(app_support_dir: &Path) -> bool {
+    let env_path = app_support_dir.join(".env");
+    if !env_path.exists() {
+        return false;
+    }
+    if let Ok(entries) = dotenvy::from_path_iter(&env_path) {
+        let mut has_access = false;
+        let mut has_secret = false;
+        for entry in entries.flatten() {
+            match entry.0.as_str() {
+                "AWS_ACCESS_KEY_ID" if !entry.1.is_empty() => has_access = true,
+                "AWS_SECRET_ACCESS_KEY" if !entry.1.is_empty() => has_secret = true,
+                _ => {}
+            }
+        }
+        has_access && has_secret
+    } else {
+        false
     }
 }
 

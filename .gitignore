@@ -28,3 +28,6 @@ src-tauri/target/
 
 # Environment variables
 .env
+
+# Screenshots
+screenshots/

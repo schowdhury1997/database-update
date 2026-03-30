@@ -9,12 +9,14 @@ import {
   XCircle,
   Loader2,
   Upload,
+  KeyRound,
+  FileKey,
 } from "lucide-react";
 import type { Preferences, Template } from "../types";
 
 interface HomeProps {
   onLocalFile: (path: string) => void;
-  onS3Download: (uri: string, profile: string) => void;
+  onS3Download: (uri: string, profile: string | null) => void;
   onLoadTemplate: (template: Template) => void;
   onManageTemplates: () => void;
   onSchedules: () => void;
@@ -27,9 +29,11 @@ export function Home({
 }: HomeProps) {
   const [sourceTab, setSourceTab] = useState<"local" | "s3">("local");
   const [s3Uri, setS3Uri] = useState("");
+  const [authMethod, setAuthMethod] = useState<"profile" | "env">("profile");
   const [awsProfiles, setAwsProfiles] = useState<string[]>(["default"]);
   const [selectedProfile, setSelectedProfile] = useState("default");
-  const [credentialStatus, setCredentialStatus] = useState<boolean | null>(null);
+  const [profileCredStatus, setProfileCredStatus] = useState<boolean | null>(null);
+  const [hasEnvCreds, setHasEnvCreds] = useState<boolean | null>(null);
   const [preferences, setPreferences] = useState<Preferences | null>(null);
   const [templates, setTemplates] = useState<Template[]>([]);
 
@@ -37,14 +41,20 @@ export function Home({
     invoke<string[]>("list_aws_profiles").then(setAwsProfiles).catch(() => {});
     invoke<Preferences>("get_preferences").then(setPreferences).catch(() => {});
     invoke<Template[]>("list_templates").then(setTemplates).catch(() => {});
+    invoke<boolean>("has_env_credentials").then((found) => {
+      setHasEnvCreds(found);
+      if (found) setAuthMethod("env");
+    }).catch(() => setHasEnvCreds(false));
   }, []);
 
   useEffect(() => {
-    setCredentialStatus(null);
+    setProfileCredStatus(null);
     invoke<boolean>("check_aws_credentials", { profile: selectedProfile })
-      .then(setCredentialStatus)
-      .catch(() => setCredentialStatus(false));
+      .then(setProfileCredStatus)
+      .catch(() => setProfileCredStatus(false));
   }, [selectedProfile]);
+
+  const credentialsValid = authMethod === "env" ? hasEnvCreds === true : profileCredStatus === true;
 
   const handleFileSelect = async () => {
     try {
@@ -168,41 +178,126 @@ export function Home({
                     className="w-full mono"
                   />
                 </div>
-                <div className="flex items-end" style={{ gap: 20, marginBottom: 28 }}>
-                  <div className="flex-1">
+
+                {/* Auth method selection */}
+                <div style={{ marginBottom: 24 }}>
+                  <label style={{ fontSize: 13, marginBottom: 10, display: "block" }} className="font-medium text-text-secondary">
+                    Authentication
+                  </label>
+                  <div className="flex" style={{ gap: 14 }}>
+                    {/* AWS Profile card */}
+                    <button
+                      onClick={() => setAuthMethod("profile")}
+                      className={`flex-1 flex items-start rounded-xl border transition-colors text-left ${
+                        authMethod === "profile"
+                          ? "border-accent bg-accent/5"
+                          : "border-border-default bg-bg-tertiary hover:bg-bg-hover"
+                      }`}
+                      style={{ padding: "16px 18px", gap: 14 }}
+                    >
+                      <div
+                        className={`rounded-lg flex items-center justify-center flex-shrink-0 ${
+                          authMethod === "profile" ? "bg-accent/15" : "bg-bg-elevated"
+                        }`}
+                        style={{ width: 36, height: 36 }}
+                      >
+                        <KeyRound size={17} className={authMethod === "profile" ? "text-accent" : "text-text-tertiary"} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div style={{ fontSize: 13, fontWeight: 500 }} className={authMethod === "profile" ? "text-text-primary" : "text-text-secondary"}>
+                          AWS Profile
+                        </div>
+                        <div style={{ fontSize: 12, marginTop: 2 }} className="text-text-tertiary">
+                          Use credentials from ~/.aws
+                        </div>
+                      </div>
+                      {authMethod === "profile" && (
+                        <div className="flex items-center flex-shrink-0" style={{ marginTop: 2 }}>
+                          {profileCredStatus === null ? (
+                            <Loader2 size={15} className="text-text-tertiary animate-spin" />
+                          ) : profileCredStatus ? (
+                            <CheckCircle2 size={15} className="text-success" />
+                          ) : (
+                            <XCircle size={15} className="text-error" />
+                          )}
+                        </div>
+                      )}
+                    </button>
+
+                    {/* .env File card */}
+                    <button
+                      onClick={() => setAuthMethod("env")}
+                      className={`flex-1 flex items-start rounded-xl border transition-colors text-left ${
+                        authMethod === "env"
+                          ? "border-accent bg-accent/5"
+                          : "border-border-default bg-bg-tertiary hover:bg-bg-hover"
+                      }`}
+                      style={{ padding: "16px 18px", gap: 14 }}
+                    >
+                      <div
+                        className={`rounded-lg flex items-center justify-center flex-shrink-0 ${
+                          authMethod === "env" ? "bg-accent/15" : "bg-bg-elevated"
+                        }`}
+                        style={{ width: 36, height: 36 }}
+                      >
+                        <FileKey size={17} className={authMethod === "env" ? "text-accent" : "text-text-tertiary"} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div style={{ fontSize: 13, fontWeight: 500 }} className={authMethod === "env" ? "text-text-primary" : "text-text-secondary"}>
+                          Environment File
+                        </div>
+                        <div style={{ fontSize: 12, marginTop: 2 }} className="text-text-tertiary">
+                          Use keys from local .env
+                        </div>
+                      </div>
+                      {authMethod === "env" && (
+                        <div className="flex items-center flex-shrink-0" style={{ marginTop: 2 }}>
+                          {hasEnvCreds === null ? (
+                            <Loader2 size={15} className="text-text-tertiary animate-spin" />
+                          ) : hasEnvCreds ? (
+                            <CheckCircle2 size={15} className="text-success" />
+                          ) : (
+                            <XCircle size={15} className="text-error" />
+                          )}
+                        </div>
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Profile dropdown (only when AWS Profile is selected) */}
+                {authMethod === "profile" && (
+                  <div style={{ marginBottom: 24 }}>
                     <label style={{ fontSize: 13, marginBottom: 8, display: "block" }} className="font-medium text-text-secondary">
-                      AWS Profile
+                      Profile
                     </label>
                     <select
                       value={selectedProfile}
                       onChange={(e) => setSelectedProfile(e.target.value)}
-                      className="w-full"
+                      style={{ maxWidth: 300 }}
                     >
                       {awsProfiles.map((p) => (
                         <option key={p} value={p}>{p}</option>
                       ))}
                     </select>
                   </div>
-                  <div className="flex items-center" style={{ gap: 10, paddingBottom: 12 }}>
-                    {credentialStatus === null ? (
-                      <Loader2 size={16} className="text-text-tertiary animate-spin" />
-                    ) : credentialStatus ? (
-                      <CheckCircle2 size={16} className="text-success" />
-                    ) : (
-                      <XCircle size={16} className="text-error" />
-                    )}
-                    <span style={{ fontSize: 13 }} className="text-text-secondary">
-                      {credentialStatus === null
-                        ? "Checking..."
-                        : credentialStatus
-                        ? "Valid credentials"
-                        : "No credentials found"}
-                    </span>
+                )}
+
+                {/* .env path hint (only when .env is selected) */}
+                {authMethod === "env" && (
+                  <div style={{ marginBottom: 24 }}>
+                    <div style={{ fontSize: 12, padding: "10px 14px" }} className="text-text-tertiary bg-bg-tertiary rounded-lg border border-border-subtle">
+                      <span className="mono">~/Library/Application Support/database-update/.env</span>
+                      <span style={{ marginLeft: 8 }}>
+                        {hasEnvCreds === null ? "" : hasEnvCreds ? "" : "— file not found or missing keys"}
+                      </span>
+                    </div>
                   </div>
-                </div>
+                )}
+
                 <button
-                  onClick={() => s3Uri && onS3Download(s3Uri, selectedProfile)}
-                  disabled={!s3Uri || credentialStatus !== true}
+                  onClick={() => s3Uri && onS3Download(s3Uri, authMethod === "profile" ? selectedProfile : null)}
+                  disabled={!s3Uri || !credentialsValid}
                   className="inline-flex items-center bg-accent hover:bg-accent-hover text-white rounded-lg font-medium transition-colors shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
                   style={{ gap: 10, padding: "12px 24px", fontSize: 14 }}
                 >

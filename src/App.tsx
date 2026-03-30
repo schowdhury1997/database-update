@@ -27,7 +27,7 @@ function App() {
   const [sqlPathForRun, setSqlPathForRun] = useState<string | undefined>();
 
   const [s3Uri, setS3Uri] = useState("");
-  const [awsProfile, setAwsProfile] = useState("default");
+  const [awsProfile, setAwsProfile] = useState<string | null>("default");
 
   const goHome = useCallback(() => {
     setScreen("home");
@@ -40,7 +40,7 @@ function App() {
     setScreen("scanning");
   }, []);
 
-  const handleS3Download = useCallback((uri: string, profile: string) => {
+  const handleS3Download = useCallback((uri: string, profile: string | null) => {
     setS3Uri(uri);
     setAwsProfile(profile);
     setScreen("s3download");
