@@ -1,0 +1,131 @@
+@import "tailwindcss";
+
+@theme {
+  /* Base backgrounds */
+  --color-bg-primary: #1a1a1e;
+  --color-bg-secondary: #222226;
+  --color-bg-tertiary: #2a2a2e;
+  --color-bg-elevated: #2e2e33;
+  --color-bg-hover: #333338;
+  --color-bg-active: #3a3a40;
+  --color-bg-input: #2a2a2e;
+
+  /* Borders */
+  --color-border-default: #38383d;
+  --color-border-subtle: #2e2e33;
+  --color-border-focus: #4a9eff;
+
+  /* Text */
+  --color-text-primary: #e4e4e8;
+  --color-text-secondary: #a0a0a8;
+  --color-text-tertiary: #6e6e78;
+  --color-text-inverse: #1a1a1e;
+
+  /* Accent */
+  --color-accent: #4a9eff;
+  --color-accent-hover: #5aacff;
+  --color-accent-muted: #4a9eff20;
+
+  /* Semantic */
+  --color-success: #3dd68c;
+  --color-success-muted: #3dd68c18;
+  --color-warning: #f0c040;
+  --color-warning-muted: #f0c04018;
+  --color-error: #f06060;
+  --color-error-muted: #f0606018;
+
+  /* Sidebar */
+  --color-sidebar-bg: #18181b;
+  --color-sidebar-hover: #27272a;
+  --color-sidebar-active: #4a9eff18;
+  --color-sidebar-text: #71717a;
+  --color-sidebar-text-active: #e4e4e8;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue",
+    system-ui, sans-serif;
+  background-color: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #44444a;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #55555a;
+}
+
+/* Form elements */
+input[type="text"],
+input[type="number"],
+input[type="search"],
+select,
+textarea {
+  background-color: var(--color-bg-input);
+  border: 1px solid var(--color-border-default);
+  color: var(--color-text-primary);
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 13px;
+  line-height: 1.4;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: var(--color-border-focus);
+  box-shadow: 0 0 0 3px var(--color-accent-muted);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--color-text-tertiary);
+}
+
+button {
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+/* Mono text */
+code, .mono {
+  font-family: "SF Mono", "Fira Code", "Cascadia Code", "Menlo", "Consolas", monospace;
+  font-size: 12px;
+}
+
+/* Selection */
+::selection {
+  background: var(--color-accent-muted);
+  color: var(--color-text-primary);
+}

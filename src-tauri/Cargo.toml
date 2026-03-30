@@ -1,0 +1,33 @@
+[package]
+name = "database-update"
+version = "0.1.0"
+description = "A macOS desktop app for condensing large MySQL dump files"
+authors = ["you"]
+edition = "2021"
+
+[lib]
+name = "database_update_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-opener = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-shell = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }
+memchr = "2"
+flate2 = "1"
+aws-config = { version = "1", features = ["behavior-version-latest"] }
+aws-sdk-s3 = "1"
+aws-credential-types = "1"
+uuid = { version = "1", features = ["v4"] }
+chrono = { version = "0.4", features = ["serde"] }
+dirs = "6"
+clap = { version = "4", features = ["derive"] }
+thiserror = "2"
+dotenvy = "0.15"
