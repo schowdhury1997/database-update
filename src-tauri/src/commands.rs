@@ -107,10 +107,7 @@ pub async fn extract_gz(path: String, app: tauri::AppHandle) -> Result<String, A
 
 #[tauri::command]
 pub async fn check_aws_credentials(profile: Option<String>) -> Result<bool, AppError> {
-    let app_support = dirs::data_dir()
-        .unwrap_or_else(|| PathBuf::from("~"))
-        .join("database-update");
-    crate::s3::check_credentials(profile.as_deref(), &app_support).await
+    crate::s3::check_profile_credentials(profile.as_deref()).await
 }
 
 #[tauri::command]
@@ -210,6 +207,14 @@ pub struct Preferences {
     pub download_directory: String,
     pub recent_files: Vec<String>,
     pub recent_s3_uris: Vec<String>,
+    #[serde(default)]
+    pub default_compose_file_path: String,
+    #[serde(default)]
+    pub default_service_name: String,
+    #[serde(default)]
+    pub default_output_directory: String,
+    #[serde(default)]
+    pub recent_database_names: Vec<String>,
 }
 
 impl Default for Preferences {
@@ -221,6 +226,10 @@ impl Default for Preferences {
             download_directory: download_dir.to_string_lossy().to_string(),
             recent_files: Vec::new(),
             recent_s3_uris: Vec::new(),
+            default_compose_file_path: String::new(),
+            default_service_name: String::new(),
+            default_output_directory: String::new(),
+            recent_database_names: Vec::new(),
         }
     }
 }

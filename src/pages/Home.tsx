@@ -12,6 +12,7 @@ import {
   KeyRound,
   FileKey,
 } from "lucide-react";
+import { ComboBox } from "../components/ComboBox";
 import type { Preferences, Template } from "../types";
 
 interface HomeProps {
@@ -170,12 +171,12 @@ export function Home({
                   <label style={{ fontSize: 13, marginBottom: 8, display: "block" }} className="font-medium text-text-secondary">
                     S3 URI
                   </label>
-                  <input
-                    type="text"
+                  <ComboBox
                     value={s3Uri}
-                    onChange={(e) => setS3Uri(e.target.value)}
+                    onChange={setS3Uri}
+                    history={preferences?.recent_s3_uris ?? []}
                     placeholder="s3://bucket-name/path/to/dump.sql.gz"
-                    className="w-full mono"
+                    mono
                   />
                 </div>
 
@@ -296,7 +297,17 @@ export function Home({
                 )}
 
                 <button
-                  onClick={() => s3Uri && onS3Download(s3Uri, authMethod === "profile" ? selectedProfile : null)}
+                  onClick={async () => {
+                    if (!s3Uri) return;
+                    // Save S3 URI to history
+                    if (preferences) {
+                      const updated = [s3Uri, ...preferences.recent_s3_uris.filter((u) => u !== s3Uri)].slice(0, 10);
+                      const newPrefs = { ...preferences, recent_s3_uris: updated };
+                      setPreferences(newPrefs);
+                      try { await invoke("save_preferences", { prefs: newPrefs }); } catch (e) { console.error(e); }
+                    }
+                    onS3Download(s3Uri, authMethod === "profile" ? selectedProfile : null);
+                  }}
                   disabled={!s3Uri || !credentialsValid}
                   className="inline-flex items-center bg-accent hover:bg-accent-hover text-white rounded-lg font-medium transition-colors shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
                   style={{ gap: 10, padding: "12px 24px", fontSize: 14 }}

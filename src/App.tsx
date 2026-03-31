@@ -7,6 +7,7 @@ import { Configure } from "./pages/Configure";
 import { Execute } from "./pages/Execute";
 import { Templates } from "./pages/Templates";
 import { Schedules } from "./pages/Schedules";
+import { Settings } from "./pages/Settings";
 import type {
   AppScreen,
   ScanResult,
@@ -149,6 +150,8 @@ function App() {
       )}
 
       {screen === "schedules" && <Schedules onBack={goHome} />}
+
+      {screen === "settings" && <Settings onBack={goHome} />}
     </Layout>
   );
 }

@@ -1,12 +1,14 @@
 import { Container, Server, Database, UserCog, Trash2 } from "lucide-react";
+import { ComboBox } from "./ComboBox";
 import type { DockerConfig } from "../types";
 
 interface DatabaseConfigProps {
   config: DockerConfig;
   onChange: (config: DockerConfig) => void;
+  recentDatabaseNames?: string[];
 }
 
-export function DatabaseConfig({ config, onChange }: DatabaseConfigProps) {
+export function DatabaseConfig({ config, onChange, recentDatabaseNames = [] }: DatabaseConfigProps) {
   const definerEnabled = !!config.definer_override;
 
   const toggleDefiner = () => {
@@ -29,9 +31,13 @@ export function DatabaseConfig({ config, onChange }: DatabaseConfigProps) {
             <Database size={12} />
             Database name
           </label>
-          <input type="text" value={config.database_name}
-            onChange={(e) => onChange({ ...config, database_name: e.target.value })}
-            placeholder="e.g., my_database" className="w-full" />
+          <ComboBox
+            value={config.database_name}
+            onChange={(v) => onChange({ ...config, database_name: v })}
+            history={recentDatabaseNames}
+            placeholder="e.g., my_database"
+            mono
+          />
         </div>
         <div>
           <label className="flex items-center text-text-secondary" style={{ gap: 6, fontSize: 12, fontWeight: 500, marginBottom: 8 }}>

@@ -214,28 +214,21 @@ pub async fn download_from_s3(
     Ok(output_path)
 }
 
-/// Check if valid AWS credentials are available.
-pub async fn check_credentials(
+/// Check if valid AWS profile credentials are available (ignores .env).
+pub async fn check_profile_credentials(
     profile: Option<&str>,
-    app_support_dir: &Path,
 ) -> Result<bool, AppError> {
-    // Short-circuit: if .env has credentials, they're usable without SDK validation
-    if has_env_credentials(app_support_dir) {
-        return Ok(true);
+    let mut loader = aws_config::defaults(BehaviorVersion::latest());
+    if let Some(profile_name) = profile {
+        loader = loader.profile_name(profile_name);
     }
-
-    let config = resolve_aws_config(profile, app_support_dir).await?;
+    let config = loader.load().await;
     let provider = config.credentials_provider();
     match provider {
-        Some(p) => {
-            match p
-                .provide_credentials()
-                .await
-            {
-                Ok(_) => Ok(true),
-                Err(_) => Ok(false),
-            }
-        }
+        Some(p) => match p.provide_credentials().await {
+            Ok(_) => Ok(true),
+            Err(_) => Ok(false),
+        },
         None => Ok(false),
     }
 }

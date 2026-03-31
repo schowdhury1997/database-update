@@ -117,6 +117,10 @@ export interface Preferences {
   download_directory: string;
   recent_files: string[];
   recent_s3_uris: string[];
+  default_compose_file_path: string;
+  default_service_name: string;
+  default_output_directory: string;
+  recent_database_names: string[];
 }
 
 export type AppScreen =
@@ -126,4 +130,5 @@ export type AppScreen =
   | "configure"
   | "execute"
   | "templates"
-  | "schedules";
+  | "schedules"
+  | "settings";

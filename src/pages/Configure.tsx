@@ -25,6 +25,7 @@ import type {
   DockerConfig,
   CondenseConfig,
   Template,
+  Preferences,
 } from "../types";
 
 interface ConfigureProps {
@@ -74,13 +75,42 @@ export function Configure({
   const [sortField, setSortField] = useState<SortField>("name");
   const [filterMode, setFilterMode] = useState<FilterMode>("all");
 
+  const [preferences, setPreferences] = useState<Preferences | null>(null);
+
   const [dockerConfig, setDockerConfig] = useState<DockerConfig>({
     compose_file_path: initialTemplate?.compose_file_path ?? "",
     service_name: initialTemplate?.service_name ?? "mysql",
     database_name: initialTemplate?.database_name ?? "",
-    definer_override: initialTemplate?.definer_override ?? null,
-    drop_existing_data: initialTemplate?.drop_existing_data ?? false,
+    definer_override: initialTemplate?.definer_override !== undefined
+      ? initialTemplate.definer_override
+      : { user: "root", host: "localhost" },
+    drop_existing_data: initialTemplate?.drop_existing_data !== undefined
+      ? initialTemplate.drop_existing_data
+      : true,
   });
+
+  // Load preferences and apply defaults where template doesn't set values
+  useEffect(() => {
+    invoke<Preferences>("get_preferences").then((prefs) => {
+      setPreferences(prefs);
+      setDockerConfig((prev) => ({
+        ...prev,
+        compose_file_path: prev.compose_file_path || initialTemplate?.compose_file_path || prefs.default_compose_file_path || "",
+        service_name: prev.service_name || initialTemplate?.service_name || prefs.default_service_name || "mysql",
+      }));
+      if (prefs.default_output_directory) {
+        setOutputPath((prev) => {
+          // Only apply default if outputPath is the auto-generated one (same directory as source)
+          const defaultGenerated = filePath.replace(/\.sql$/, "") + "_condensed.sql";
+          if (prev === defaultGenerated && prefs.default_output_directory) {
+            const fileName = filePath.split("/").pop()?.replace(/\.sql$/, "") + "_condensed.sql";
+            return prefs.default_output_directory.replace(/\/$/, "") + "/" + fileName;
+          }
+          return prev;
+        });
+      }
+    }).catch(console.error);
+  }, []);
 
   const [cascadeModal, setCascadeModal] = useState<{
     targetTable: string;
@@ -193,6 +223,14 @@ export function Configure({
     return total;
   }, [scanResult.tables, tableActions]);
 
+  const saveDatabaseNameToHistory = useCallback(async (name: string) => {
+    if (!name || !preferences) return;
+    const updated = [name, ...preferences.recent_database_names.filter((n) => n !== name)].slice(0, 10);
+    const newPrefs = { ...preferences, recent_database_names: updated };
+    setPreferences(newPrefs);
+    try { await invoke("save_preferences", { prefs: newPrefs }); } catch (e) { console.error(e); }
+  }, [preferences]);
+
   const buildCondenseConfig = (): CondenseConfig => ({
     source_path: filePath, output_path: outputPath, table_configs: { ...tableActions },
     definer_override: dockerConfig.definer_override ?? null,
@@ -216,6 +254,9 @@ export function Configure({
     ...checkedTables,
     ...fkLocks.filter((l) => l.locked).map((l) => l.table),
   ]).size;
+
+  const allTablesIncluded = checkedCount === scanResult.tables.length &&
+    Object.values(tableActions).every((c) => c.action === "include_all");
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
@@ -335,7 +376,7 @@ export function Configure({
 
         {/* Docker config */}
         <div className="border-b border-border-subtle" style={{ padding: "20px 32px" }}>
-          <DatabaseConfig config={dockerConfig} onChange={setDockerConfig} />
+          <DatabaseConfig config={dockerConfig} onChange={setDockerConfig} recentDatabaseNames={preferences?.recent_database_names ?? []} />
         </div>
 
         {/* Actions */}
@@ -354,18 +395,32 @@ export function Configure({
               style={{ gap: 8, padding: "10px 18px", fontSize: 13 }}>
               <Save size={15} /> Save Template
             </button>
-            <button onClick={() => onRunSql(dockerConfig, filePath)}
-              className="flex items-center rounded-lg text-text-secondary bg-bg-tertiary hover:bg-bg-hover border border-border-default transition-colors"
+            <button onClick={() => { saveDatabaseNameToHistory(dockerConfig.database_name); onRunSql(dockerConfig, filePath); }}
+              className={`flex items-center rounded-lg font-medium transition-colors ${
+                allTablesIncluded
+                  ? "text-text-inverse bg-success hover:opacity-90 shadow-sm"
+                  : "text-text-secondary bg-bg-tertiary hover:bg-bg-hover border border-border-default"
+              }`}
               style={{ gap: 8, padding: "10px 18px", fontSize: 13 }}>
               <Play size={15} /> Run SQL Only
             </button>
-            <button onClick={() => onCondense(buildCondenseConfig())}
-              className="flex items-center rounded-lg text-white bg-accent hover:bg-accent-hover font-medium transition-colors shadow-sm"
+            <button onClick={() => { saveDatabaseNameToHistory(dockerConfig.database_name); onCondense(buildCondenseConfig()); }}
+              disabled={allTablesIncluded}
+              className={`flex items-center rounded-lg font-medium transition-colors ${
+                allTablesIncluded
+                  ? "text-text-tertiary bg-bg-tertiary border border-border-default opacity-40 cursor-not-allowed"
+                  : "text-white bg-accent hover:bg-accent-hover shadow-sm"
+              }`}
               style={{ gap: 8, padding: "10px 20px", fontSize: 13 }}>
               <Zap size={15} /> Condense
             </button>
-            <button onClick={() => onCondenseAndRun(buildCondenseConfig(), dockerConfig)}
-              className="flex items-center rounded-lg text-text-inverse bg-success hover:opacity-90 font-medium transition-colors shadow-sm"
+            <button onClick={() => { saveDatabaseNameToHistory(dockerConfig.database_name); onCondenseAndRun(buildCondenseConfig(), dockerConfig); }}
+              disabled={allTablesIncluded}
+              className={`flex items-center rounded-lg font-medium transition-colors ${
+                allTablesIncluded
+                  ? "text-text-tertiary bg-bg-tertiary border border-border-default opacity-40 cursor-not-allowed"
+                  : "text-text-inverse bg-success hover:opacity-90 shadow-sm"
+              }`}
               style={{ gap: 8, padding: "10px 20px", fontSize: 13 }}>
               <Play size={15} /> Condense & Run
             </button>

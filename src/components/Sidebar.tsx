@@ -74,11 +74,20 @@ export function Sidebar({ activeScreen, onNavigate }: SidebarProps) {
 
       {/* Bottom settings */}
       <button
-        className="flex flex-col items-center rounded-xl text-sidebar-text hover:bg-sidebar-hover hover:text-sidebar-text-active transition-all duration-150"
+        onClick={() => onNavigate("settings")}
+        className={`
+          flex flex-col items-center rounded-xl transition-all duration-150
+          ${activeScreen === "settings"
+            ? "bg-sidebar-active text-sidebar-text-active"
+            : "text-sidebar-text hover:bg-sidebar-hover hover:text-sidebar-text-active"
+          }
+        `}
         style={{ width: 64, padding: "10px 0", gap: 5 }}
         title="Settings"
       >
-        <Settings size={20} />
+        <div className={`transition-colors ${activeScreen === "settings" ? "text-accent" : ""}`}>
+          <Settings size={20} />
+        </div>
         <span style={{ fontSize: 10, fontWeight: 500, lineHeight: 1.2 }}>Settings</span>
       </button>
     </div>
